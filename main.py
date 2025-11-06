@@ -1,9 +1,9 @@
 import streamlit as st
-from mistralai.client import MistralClient
-from mistralai.models.ocr import OCRRequest
+from mistralai import Mistral
 import base64
 import io
 from PIL import Image
+import requests
 
 st.set_page_config(
     page_title="Application OCR avec Mistral",
@@ -67,22 +67,67 @@ if st.button("Traiter", type="primary", use_container_width=True):
     if (source_type == "URL" and not file_url) or (source_type == "Upload local" and not file_path):
         st.error("❌ Veuillez fournir un fichier ou une URL valide")
         st.stop()
-    client = MistralClient(api_key=api_key)
+
+    client = Mistral(api_key=api_key)
+
     with st.spinner("🔄 Traitement du document..."):
         try:
+            # Déterminer le type MIME
+            if file_type == "PDF":
+                mime_type = "application/pdf"
+            else:
+                mime_type = "image/jpeg"  # Par défaut
+
+            # Construire le message pour l'API
             if source_type == "URL" and file_url:
-                ocr_request = OCRRequest(document_url=file_url)
+                # Utiliser l'URL directement
+                image_content = {
+                    "type": "image_url",
+                    "image_url": file_url
+                }
                 st.session_state.file_preview = file_url
                 st.session_state.is_pdf = file_type == "PDF"
                 st.session_state.file_content = None
             else:
+                # Encoder le fichier en base64
                 file_bytes = file_path.read()
                 st.session_state.file_content = file_bytes
                 st.session_state.is_pdf = file_type == "PDF"
                 base64_encoded = base64.b64encode(file_bytes).decode('utf-8')
-                ocr_request = OCRRequest(document_base64=base64_encoded)
-            response = client.ocr(model="mistral-ocr-latest", request=ocr_request)
-            st.session_state.ocr_result = response.text
+
+                # Déterminer le type MIME précis pour les images uploadées
+                if file_type == "Image":
+                    if file_path.name.lower().endswith('.png'):
+                        mime_type = "image/png"
+                    elif file_path.name.lower().endswith(('.jpg', '.jpeg')):
+                        mime_type = "image/jpeg"
+
+                image_content = {
+                    "type": "image_url",
+                    "image_url": f"data:{mime_type};base64,{base64_encoded}"
+                }
+
+            # Créer le message avec l'image
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Extrais tout le texte de ce document. Fournis uniquement le texte extrait, sans commentaires ni formatage supplémentaire."
+                        },
+                        image_content
+                    ]
+                }
+            ]
+
+            # Appeler l'API Mistral avec le modèle vision
+            response = client.chat.complete(
+                model="pixtral-12b-2409",
+                messages=messages
+            )
+
+            st.session_state.ocr_result = response.choices[0].message.content
             st.success("✅ Traitement OCR terminé avec succès !")
         except Exception as e:
             st.error(f"❌ Erreur lors du traitement: {str(e)}")
