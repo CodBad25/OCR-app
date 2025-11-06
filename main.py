@@ -1,19 +1,16 @@
 import streamlit as st
-from mistralai.client import MistralClient
-from mistralai.models.ocr import OCRRequest
+from mistralai import Mistral
+from mistralai.models import DocumentURLChunk
 import base64
 import io
 from PIL import Image
+import json
 
 st.set_page_config(
     page_title="Application OCR avec Mistral",
     page_icon="🔍",
     layout="wide"
 )
-
-def get_download_link(content, filename, text):
-    b64 = base64.b64encode(content.encode()).decode()
-    return f'<a href="data:file/txt;base64,{b64}" download="{filename}">{text}</a>'
 
 def display_pdf(file_content=None, file_url=None):
     if file_url:
@@ -67,22 +64,54 @@ if st.button("Traiter", type="primary", use_container_width=True):
     if (source_type == "URL" and not file_url) or (source_type == "Upload local" and not file_path):
         st.error("❌ Veuillez fournir un fichier ou une URL valide")
         st.stop()
-    client = MistralClient(api_key=api_key)
+
+    client = Mistral(api_key=api_key)
+
     with st.spinner("🔄 Traitement du document..."):
         try:
             if source_type == "URL" and file_url:
-                ocr_request = OCRRequest(document_url=file_url)
+                # Utiliser l'URL directement avec l'API OCR
+                document = DocumentURLChunk(document_url=file_url)
                 st.session_state.file_preview = file_url
                 st.session_state.is_pdf = file_type == "PDF"
                 st.session_state.file_content = None
             else:
+                # Upload du fichier et obtention d'une URL signée
                 file_bytes = file_path.read()
                 st.session_state.file_content = file_bytes
                 st.session_state.is_pdf = file_type == "PDF"
-                base64_encoded = base64.b64encode(file_bytes).decode('utf-8')
-                ocr_request = OCRRequest(document_base64=base64_encoded)
-            response = client.ocr(model="mistral-ocr-latest", request=ocr_request)
-            st.session_state.ocr_result = response.text
+
+                # Upload du fichier vers Mistral
+                with st.spinner("📤 Upload du fichier..."):
+                    uploaded_file = client.files.upload(
+                        file={
+                            "file_name": file_path.name,
+                            "content": file_bytes,
+                        },
+                        purpose="ocr",
+                    )
+
+                # Obtenir l'URL signée (expire dans 1 heure)
+                signed_url = client.files.get_signed_url(file_id=uploaded_file.id, expiry=1)
+                document = DocumentURLChunk(document_url=signed_url.url)
+
+            # Traiter le document avec l'API OCR
+            ocr_response = client.ocr.process(
+                model="mistral-ocr-latest",
+                document=document,
+                include_image_base64=False
+            )
+
+            # Extraire le texte de la réponse
+            response_dict = json.loads(ocr_response.model_dump_json())
+
+            # Le texte se trouve dans response_dict["text"]
+            if "text" in response_dict:
+                st.session_state.ocr_result = response_dict["text"]
+            else:
+                # Si pas de champ "text", essayer de concaténer le contenu
+                st.session_state.ocr_result = str(response_dict)
+
             st.success("✅ Traitement OCR terminé avec succès !")
         except Exception as e:
             st.error(f"❌ Erreur lors du traitement: {str(e)}")
@@ -108,4 +137,9 @@ if st.session_state.ocr_result:
     with col2:
         st.subheader("🔍 Résultat OCR")
         st.markdown(st.session_state.ocr_result)
-        st.markdown(get_download_link(st.session_state.ocr_result, "resultat_ocr.txt", "📥 Télécharger le résultat"), unsafe_allow_html=True)
+        st.download_button(
+            label="📥 Télécharger le résultat",
+            data=st.session_state.ocr_result,
+            file_name="resultat_ocr.txt",
+            mime="text/plain"
+        )
