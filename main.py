@@ -4,7 +4,6 @@ from mistralai.models import DocumentURLChunk
 import base64
 import io
 from PIL import Image
-import json
 
 st.set_page_config(
     page_title="Application OCR avec Mistral",
@@ -102,15 +101,13 @@ if st.button("Traiter", type="primary", use_container_width=True):
                 include_image_base64=False
             )
 
-            # Extraire le texte de la réponse
-            response_dict = json.loads(ocr_response.model_dump_json())
+            # Extraire le texte markdown de toutes les pages
+            markdowns = []
+            for page in ocr_response.pages:
+                markdowns.append(page.markdown)
 
-            # Le texte se trouve dans response_dict["text"]
-            if "text" in response_dict:
-                st.session_state.ocr_result = response_dict["text"]
-            else:
-                # Si pas de champ "text", essayer de concaténer le contenu
-                st.session_state.ocr_result = str(response_dict)
+            # Combiner le texte de toutes les pages
+            st.session_state.ocr_result = "\n\n---\n\n".join(markdowns)
 
             st.success("✅ Traitement OCR terminé avec succès !")
         except Exception as e:
