@@ -1,19 +1,16 @@
 import streamlit as st
 from mistralai import Mistral
+from mistralai.models import DocumentURLChunk
 import base64
 import io
 from PIL import Image
-import requests
+import json
 
 st.set_page_config(
     page_title="Application OCR avec Mistral",
     page_icon="🔍",
     layout="wide"
 )
-
-def get_download_link(content, filename, text):
-    b64 = base64.b64encode(content.encode()).decode()
-    return f'<a href="data:file/txt;base64,{b64}" download="{filename}">{text}</a>'
 
 def display_pdf(file_content=None, file_url=None):
     if file_url:
@@ -72,62 +69,49 @@ if st.button("Traiter", type="primary", use_container_width=True):
 
     with st.spinner("🔄 Traitement du document..."):
         try:
-            # Déterminer le type MIME
-            if file_type == "PDF":
-                mime_type = "application/pdf"
-            else:
-                mime_type = "image/jpeg"  # Par défaut
-
-            # Construire le message pour l'API
             if source_type == "URL" and file_url:
-                # Utiliser l'URL directement
-                image_content = {
-                    "type": "image_url",
-                    "image_url": file_url
-                }
+                # Utiliser l'URL directement avec l'API OCR
+                document = DocumentURLChunk(document_url=file_url)
                 st.session_state.file_preview = file_url
                 st.session_state.is_pdf = file_type == "PDF"
                 st.session_state.file_content = None
             else:
-                # Encoder le fichier en base64
+                # Upload du fichier et obtention d'une URL signée
                 file_bytes = file_path.read()
                 st.session_state.file_content = file_bytes
                 st.session_state.is_pdf = file_type == "PDF"
-                base64_encoded = base64.b64encode(file_bytes).decode('utf-8')
 
-                # Déterminer le type MIME précis pour les images uploadées
-                if file_type == "Image":
-                    if file_path.name.lower().endswith('.png'):
-                        mime_type = "image/png"
-                    elif file_path.name.lower().endswith(('.jpg', '.jpeg')):
-                        mime_type = "image/jpeg"
-
-                image_content = {
-                    "type": "image_url",
-                    "image_url": f"data:{mime_type};base64,{base64_encoded}"
-                }
-
-            # Créer le message avec l'image
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Extrais tout le texte de ce document. Fournis uniquement le texte extrait, sans commentaires ni formatage supplémentaire."
+                # Upload du fichier vers Mistral
+                with st.spinner("📤 Upload du fichier..."):
+                    uploaded_file = client.files.upload(
+                        file={
+                            "file_name": file_path.name,
+                            "content": file_bytes,
                         },
-                        image_content
-                    ]
-                }
-            ]
+                        purpose="ocr",
+                    )
 
-            # Appeler l'API Mistral avec le modèle vision
-            response = client.chat.complete(
-                model="pixtral-12b-2409",
-                messages=messages
+                # Obtenir l'URL signée (expire dans 1 heure)
+                signed_url = client.files.get_signed_url(file_id=uploaded_file.id, expiry=1)
+                document = DocumentURLChunk(document_url=signed_url.url)
+
+            # Traiter le document avec l'API OCR
+            ocr_response = client.ocr.process(
+                model="mistral-ocr-latest",
+                document=document,
+                include_image_base64=False
             )
 
-            st.session_state.ocr_result = response.choices[0].message.content
+            # Extraire le texte de la réponse
+            response_dict = json.loads(ocr_response.model_dump_json())
+
+            # Le texte se trouve dans response_dict["text"]
+            if "text" in response_dict:
+                st.session_state.ocr_result = response_dict["text"]
+            else:
+                # Si pas de champ "text", essayer de concaténer le contenu
+                st.session_state.ocr_result = str(response_dict)
+
             st.success("✅ Traitement OCR terminé avec succès !")
         except Exception as e:
             st.error(f"❌ Erreur lors du traitement: {str(e)}")
@@ -153,4 +137,9 @@ if st.session_state.ocr_result:
     with col2:
         st.subheader("🔍 Résultat OCR")
         st.markdown(st.session_state.ocr_result)
-        st.markdown(get_download_link(st.session_state.ocr_result, "resultat_ocr.txt", "📥 Télécharger le résultat"), unsafe_allow_html=True)
+        st.download_button(
+            label="📥 Télécharger le résultat",
+            data=st.session_state.ocr_result,
+            file_name="resultat_ocr.txt",
+            mime="text/plain"
+        )

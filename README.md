@@ -1,6 +1,6 @@
 # 🔍 Mistral OCR App
 
-Application Streamlit utilisant l'API Mistral Vision (Pixtral) pour extraire du texte à partir d'images et de PDF.
+Application Streamlit utilisant l'**API OCR officielle de Mistral** (`mistral-ocr-latest`) pour extraire du texte à partir d'images et de PDF.
 
 ## ✨ Fonctionnalités
 
@@ -69,9 +69,18 @@ Application Streamlit utilisant l'API Mistral Vision (Pixtral) pour extraire du 
 ## 🛠️ Technologies utilisées
 
 - **Streamlit** - Interface web
-- **Mistral AI** (Pixtral-12B) - Modèle de vision pour OCR
+- **Mistral AI OCR** (`mistral-ocr-latest`) - API OCR officielle de Mistral
 - **Pillow** - Traitement d'images
 - **Python** - Backend
+
+## 🔬 Fonctionnement technique
+
+L'application utilise l'**API OCR dédiée de Mistral** :
+- Pour les URLs : traitement direct via `client.ocr.process()`
+- Pour les fichiers locaux : upload vers Mistral → URL signée → traitement OCR
+- Modèle : `mistral-ocr-latest` (reconnaissance haute précision)
+- Tarification : ~1$/1000 pages
+- Support : jusqu'à 50 MB ou 1000 pages par requête
 
 ## 📝 Utilisation
 
