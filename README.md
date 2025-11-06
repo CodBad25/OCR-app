@@ -1,4 +1,42 @@
-# 🔍 Mistral OCR App
+# 🎓 OCR-App - Suite Complète DNB Mathalea
+
+Repository regroupant **3 applications Streamlit** pour l'exploitation des annales du Brevet des Collèges (DNB).
+
+## 📦 Applications Disponibles
+
+### 1️⃣ **OCR Simple** (`main.py`) - ✅ EN LIGNE
+Application basique d'extraction de texte depuis PDF et images.
+
+**🔗 URL** : Votre instance Streamlit Cloud
+
+### 2️⃣ **Parser DNB** (`app_parser_dnb.py`) - 📚 LOCAL
+Parse les fichiers TEX du repository mathalea/dnb et extrait les questions.
+
+**📖 Documentation** : [README_PARSER.md](README_PARSER.md)
+
+### 3️⃣ **Plateforme Complète** (`app_dnb_complete.py`) - ⭐ RECOMMANDÉ
+Application tout-en-un combinant parsing, OCR, analyse IA, génération de sujets et correction automatique.
+
+**📖 Documentation** : [README_APP_COMPLETE.md](README_APP_COMPLETE.md)
+
+---
+
+## 🚀 Lancement Rapide
+
+```bash
+# Application OCR Simple
+streamlit run main.py
+
+# Parser DNB
+streamlit run app_parser_dnb.py
+
+# Plateforme Complète (recommandé)
+streamlit run app_dnb_complete.py
+```
+
+---
+
+# 🔍 OCR Simple - Documentation
 
 Application Streamlit utilisant l'**API OCR officielle de Mistral** (`mistral-ocr-latest`) pour extraire du texte à partir d'images et de PDF.
 
